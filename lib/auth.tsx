@@ -31,6 +31,9 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Dev escape hatch: set NEXT_PUBLIC_DISABLE_AUTH=true to bypass auth UI entirely.
+const DISABLE_AUTH = process.env.NEXT_PUBLIC_DISABLE_AUTH === 'true'
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -41,8 +44,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [lastError, setLastError] = useState<string|null>(null)
   const [autoDebug, setAutoDebug] = useState<string|undefined>()
 
+  // If auth is disabled, immediately set a permissive demo user.
+  useEffect(() => {
+    if (!DISABLE_AUTH) return
+    const demo: User = { name: 'demo', roles: ['admin', 'editor', 'viewer'] }
+    setUser(demo)
+    setUsers([demo])
+    setIsLoading(false)
+  }, [])
+
   // initial load from API
   useEffect(() => {
+  if (DISABLE_AUTH) return
     let cancelled = false
     const load = async () => {
       try {
