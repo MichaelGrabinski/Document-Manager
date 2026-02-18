@@ -1,0 +1,11 @@
+[
+  {
+    "id": "default-group",
+    "name": "General",
+    "parentId": null,
+    "searchKeys": [
+      "general",
+      "uncategorized"
+    ]
+  }
+]

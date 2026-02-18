@@ -1,0 +1,65 @@
+// Prisma schema for SQLite persistence
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id           String   @id @default(cuid())
+  name         String
+  parentId     String?
+  parent       Group?   @relation("GroupChildren", fields: [parentId], references: [id])
+  children     Group[]  @relation("GroupChildren")
+  searchKeys   String   @default("[]") // JSON encoded string array
+  allowedRoles String   @default("[]") // JSON encoded string array
+  documents    Document[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([parentId])
+}
+
+model Document {
+  id                  String   @id @default(cuid())
+  name                String
+  type                String
+  uploader            String
+  uploadedAt          DateTime @default(now())
+  keywords            String   @default("[]") // JSON encoded string array
+  aiSummary           String?
+  aiExtractedKeywords String   @default("[]") // JSON encoded string array
+  fullSimulatedText   String?
+  groupId             String?
+  originalFileName    String?  // Full original filename with extension
+  storedFileName      String?  // Internal stored filename on disk
+  group               Group?   @relation(fields: [groupId], references: [id])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([groupId])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  roles     String   @default("[]") // JSON encoded roles
+  rolesEncrypted String? // future encrypted blob
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  target    String?
+  details   String? // JSON blob
+  createdAt DateTime @default(now())
+  @@index([actor])
+  @@index([action])
+}
