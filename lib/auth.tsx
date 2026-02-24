@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { UserCircle } from "lucide-react"
+import { withBasePath } from "@/lib/base-path"
 
 type AuthContextType = {
   user: User | null
@@ -62,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // 1. Try auto Windows header login (if proxy provides header)
         // Try auto Windows header login regardless of build-time flag; server decides if enabled
         try {
-          const autoRes = await fetch('/api/auth/auto')
+          const autoRes = await fetch(withBasePath('/api/auth/auto'))
           const txt = await autoRes.text()
           let autoJson: any = null
           try { autoJson = JSON.parse(txt) } catch {}
@@ -77,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         // 2. Validate existing session cookie
         if (!user) {
-          const sessionRes = await fetch('/api/auth/session')
+          const sessionRes = await fetch(withBasePath('/api/auth/session'))
           if (sessionRes.ok) {
             const sessionData = await sessionRes.json()
             if (sessionData?.authenticated && sessionData.user) {
@@ -85,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         }
-        const res = await fetch('/api/users')
+  const res = await fetch(withBasePath('/api/users'))
         const data = await res.json()
         if (!cancelled) setUsers(data || [])
       } catch (e) {
@@ -104,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setLastError(null)
       const baseRoles = username.toLowerCase().includes('admin') ? ['admin','editor','viewer'] : username.toLowerCase().includes('editor') ? ['editor','viewer'] : ['viewer']
-      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name: username.trim(), roles: baseRoles }) })
+  const res = await fetch(withBasePath('/api/users'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name: username.trim(), roles: baseRoles }) })
       const data = await res.json()
       if (data?.user) {
         setUser(data.user)
@@ -130,7 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsSaving(true)
     setLastError(null)
     try {
-      const res = await fetch('/api/auth/windows', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }) })
+  const res = await fetch(withBasePath('/api/auth/windows'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }) })
       const data = await res.json()
       if (!res.ok) {
         setLastError(data?.error || 'Windows auth failed')
@@ -158,7 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const logout = () => {
-  fetch('/api/auth/logout', { method: 'POST' }).catch(()=>{})
+  fetch(withBasePath('/api/auth/logout'), { method: 'POST' }).catch(()=>{})
   sessionStorage.removeItem('currentUserName')
   setUser(null)
   }
@@ -171,7 +172,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!name.trim()) return
     setIsSaving(true)
     try {
-      const res = await fetch('/api/users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), roles }) })
+  const res = await fetch(withBasePath('/api/users'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), roles }) })
       const data = await res.json()
       if (data?.user) {
         setUsers(prev => prev.find(p=>p.name===data.user.name) ? prev.map(p=>p.name===data.user.name?data.user:p) : [...prev, data.user])
@@ -182,7 +183,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const updateUserRoles = async (name: string, roles: string[]) => {
     setIsSaving(true)
     try {
-      const res = await fetch('/api/users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, roles }) })
+  const res = await fetch(withBasePath('/api/users'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, roles }) })
       const data = await res.json()
       if (data?.user) {
         setUsers(prev => prev.map(u=>u.name===name?data.user:u))
@@ -194,7 +195,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const deleteUser = async (name: string) => {
     setIsSaving(true)
     try {
-      await fetch('/api/users', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) })
+  await fetch(withBasePath('/api/users'), { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) })
       setUsers(prev => prev.filter(u=>u.name!==name))
       if (user?.name === name) logout()
     } finally { setIsSaving(false) }

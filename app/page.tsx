@@ -15,6 +15,7 @@ import AppSidebarClient from "@/components/app-sidebar"
 import DocumentViewer from "@/components/document-viewer"
 import EditGroupForm from "@/components/edit-group-form"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { withBasePath } from "@/lib/base-path"
 
 export default function HomePage() {
   const [documents, setDocuments] = useState<Document[]>([])
@@ -33,7 +34,7 @@ export default function HomePage() {
 
   useEffect(() => {
     // Load documents from backend API
-    fetch("/api/documents")
+  fetch(withBasePath("/api/documents"))
       .then((res) => res.json())
       .then((docs) => {
         setDocuments(
@@ -47,7 +48,7 @@ export default function HomePage() {
       })
       .catch(() => setDocuments([]))
     // Load groups from backend API
-    fetch("/api/groups")
+  fetch(withBasePath("/api/groups"))
       .then(res => res.json())
       .then(gs => setGroups(gs.map((g: any) => ({
         ...g,
@@ -95,7 +96,7 @@ export default function HomePage() {
     }
     setDocuments((prevDocs) => [newDoc, ...prevDocs])
     // Persist immediately
-    fetch("/api/documents", {
+  fetch(withBasePath("/api/documents"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newDoc),
@@ -117,7 +118,7 @@ export default function HomePage() {
       }
     }
     setDocuments((prevDocs) => prevDocs.filter((doc) => doc.id !== id))
-    fetch("/api/documents", {
+  fetch(withBasePath("/api/documents"), {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
@@ -137,7 +138,7 @@ export default function HomePage() {
       if (!hasRole("admin")) return
       const newGroup: Group = { id: crypto.randomUUID(), name: groupName, parentId: parentId, searchKeys: [] }
       setGroups((prevGroups) => [...prevGroups, newGroup])
-      fetch("/api/groups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup) })
+  fetch(withBasePath("/api/groups"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup) })
     },
     [hasRole],
   )
@@ -149,7 +150,7 @@ export default function HomePage() {
 
   const handleUpdateGroup = useCallback((updatedGroupData: Partial<Group> & { id: string }) => {
     setGroups((prevGroups) => prevGroups.map((g) => (g.id === updatedGroupData.id ? { ...g, ...updatedGroupData } : g)))
-    fetch("/api/groups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedGroupData) })
+  fetch(withBasePath("/api/groups"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedGroupData) })
     setIsEditGroupDialogOpen(false)
     setEditingGroup(null)
   }, [])
