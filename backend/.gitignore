@@ -1,0 +1,12 @@
+# Local environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Django
+*.sqlite3
+media/
+staticfiles/

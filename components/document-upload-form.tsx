@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth"
 import { UploadCloud, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { withApiBase } from "@/lib/base-path"
 
 type DocumentUploadFormProps = {
   onDocumentAdd: (doc: Document) => void
@@ -88,13 +89,16 @@ export default function DocumentUploadForm({ onDocumentAdd, groups }: DocumentUp
       if (selectedGroupId) formData.append("groupId", selectedGroupId)
       formData.append("keywords", keywords.join(","))
       try {
-        const res = await fetch("/api/documents/create-from-upload", { method: "POST", body: formData })
+        const res = await fetch(withApiBase("/api/documents/create-from-upload"), { method: "POST", body: formData })
         const data = await res.json()
         if (res.ok && data.doc) {
           // Attach the File client-side for viewing/downloading session-only
             const newDocument: Document = { ...data.doc, file, uploadedAt: new Date(data.doc.uploadedAt) }
             onDocumentAdd(newDocument)
-            toast({ title: `Uploaded (${idx + 1}/${files.length})`, description: `${newDocument.name} created${data.ai ? ' with AI' : ''}.` })
+            const kwCount = (data.doc.aiExtractedKeywords || []).length
+            const stage = data.extractionStage || 'none'
+            const method = data.ai ? 'OpenAI' : stage !== 'none' ? `local (${stage})` : 'no text found'
+            toast({ title: `Uploaded (${idx + 1}/${files.length})`, description: `${newDocument.name} — ${kwCount} keywords extracted via ${method}.` })
         } else {
           toast({ variant: "destructive", title: "Upload failed", description: data.error || "Unknown error" })
         }

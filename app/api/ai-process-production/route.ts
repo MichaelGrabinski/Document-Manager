@@ -1,9 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
-import pdf from "pdf-parse"
+import type pdfParse from "pdf-parse"
 
 export async function POST(req: NextRequest) {
+  // This route is the "production" real-PDF extractor, but it can break builds if
+  // the environment isn't ready (e.g. missing sample/test assets). Keep it
+  // explicitly opt-in.
+  if (process.env.ENABLE_AI_PROCESS_PRODUCTION !== "true") {
+    return NextResponse.json(
+      {
+        summary: "Production AI PDF processing route disabled.",
+        extractedKeywords: [],
+        fullExtractedText: "",
+        message: "Set ENABLE_AI_PROCESS_PRODUCTION=true to enable this endpoint.",
+      },
+      { status: 404 },
+    )
+  }
+
   let formData
   try {
     formData = await req.formData()
@@ -59,6 +74,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+  // Import here to avoid any potential module-load side effects during `next build`
+  // (Next may evaluate route modules while collecting data).
+  const { default: pdf } = (await import("pdf-parse")) as unknown as { default: typeof pdfParse }
+
     // Convert File to Buffer for pdf-parse
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { withBasePath, withApiBase } from "@/lib/base-path"
 import {
   Sidebar,
   SidebarContent,
@@ -181,7 +182,7 @@ const GroupItemContentInternal = ({
                   setConfirmingDelete(true)
                   setTimeout(() => setConfirmingDelete(false), 3000)
                 } else {
-                  fetch('/api/groups', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: group.id }) })
+                  fetch(withApiBase('/api/groups'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: group.id }) })
                   // Optimistic removal from UI: custom event dispatch for parent to reload or rely on external refresh logic.
                   const ev = new CustomEvent('group-deleted', { detail: { id: group.id } })
                   window.dispatchEvent(ev)
@@ -270,7 +271,7 @@ export default function AppSidebarClient({
   return (
     <Sidebar className="border-r bg-background" collapsible={isMobile ? "offcanvas" : "icon"}>
       <SidebarHeader className="p-2 border-b">
-        <Link href="/" className="flex items-center gap-2 font-semibold group-data-[collapsible=icon]:justify-center">
+    <Link href={withBasePath("/")} className="flex items-center gap-2 font-semibold group-data-[collapsible=icon]:justify-center">
           <BookOpenText className="h-6 w-6 text-slate-700 dark:text-slate-300" />
           <span className="group-data-[collapsible=icon]:hidden text-slate-800 dark:text-slate-200">DocManager</span>
         </Link>
@@ -340,7 +341,7 @@ export default function AppSidebarClient({
             </SidebarMenuItem>
           )}
           <SidebarMenuItem>
-            <Link href="/settings" className="w-full">
+              <Link href={withBasePath("/settings")} className="w-full">
               <SidebarMenuButton asChild>
                 <span>
                   <Settings size={16} className="mr-2" />

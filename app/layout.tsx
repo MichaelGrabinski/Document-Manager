@@ -5,9 +5,8 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/lib/auth"
 import { Toaster } from "@/components/ui/toaster"
-import { SidebarProvider } from "@/components/ui/sidebar" // [^1]
-import AppSidebar from "@/components/app-sidebar" // We'll create this
-import Header from "@/components/header" // Moving Header here for consistent layout
+import { SidebarProvider } from "@/components/ui/sidebar"
+import Header from "@/components/header"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -28,17 +27,12 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <SidebarProvider defaultOpen={true}>
-              {" "}
-              {/* [^1] Default sidebar to open */}
-              <div className="flex min-h-screen w-full">
-                <AppSidebar />
-                <div className="flex flex-col flex-1">
-                  <Header /> {/* Header now part of the main content area next to sidebar */}
-                  <main className="flex-1 p-4 md:p-6 lg:p-8 bg-muted/40">{children}</main>
-                  <footer className="py-4 text-center text-sm text-muted-foreground border-t bg-background">
-                    Document Manager App &copy; {new Date().getFullYear()}
-                  </footer>
-                </div>
+              <div className="flex flex-col min-h-screen w-full">
+                <Header />
+                <main className="flex-1 flex">{children}</main>
+                <footer className="py-4 text-center text-sm text-muted-foreground border-t bg-background" suppressHydrationWarning>
+                  Document Manager App &copy; {new Date().getFullYear()}
+                </footer>
               </div>
             </SidebarProvider>
             <Toaster />

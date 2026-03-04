@@ -14,11 +14,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { UserCircle } from "lucide-react"
-import { withBasePath } from "@/lib/base-path"
+import { withApiBase } from "@/lib/base-path"
 
 type AuthContextType = {
   user: User | null
-  login: (username: string) => void
+  login: (username: string, password: string) => Promise<void>
   windowsLogin: (username: string, password: string) => Promise<void>
   logout: () => void
   isLoading: boolean
@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // 1. Try auto Windows header login (if proxy provides header)
         // Try auto Windows header login regardless of build-time flag; server decides if enabled
         try {
-          const autoRes = await fetch(withBasePath('/api/auth/auto'))
+          const autoRes = await fetch(withApiBase('/api/auth/auto'))
           const txt = await autoRes.text()
           let autoJson: any = null
           try { autoJson = JSON.parse(txt) } catch {}
@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         // 2. Validate existing session cookie
         if (!user) {
-          const sessionRes = await fetch(withBasePath('/api/auth/session'))
+          const sessionRes = await fetch(withApiBase('/api/auth/session'))
           if (sessionRes.ok) {
             const sessionData = await sessionRes.json()
             if (sessionData?.authenticated && sessionData.user) {
@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         }
-  const res = await fetch(withBasePath('/api/users'))
+  const res = await fetch(withApiBase('/api/users'))
         const data = await res.json()
         if (!cancelled) setUsers(data || [])
       } catch (e) {
@@ -99,30 +99,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { cancelled = true }
   }, [])
 
-  const login = async (username: string) => {
-    if (!username.trim()) return
+  const login = async (username: string, password: string) => {
+    if (!username.trim() || !password) return
     setIsSaving(true)
+    setLastError(null)
     try {
-      setLastError(null)
-      const baseRoles = username.toLowerCase().includes('admin') ? ['admin','editor','viewer'] : username.toLowerCase().includes('editor') ? ['editor','viewer'] : ['viewer']
-  const res = await fetch(withBasePath('/api/users'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name: username.trim(), roles: baseRoles }) })
-      const data = await res.json()
+      const res = await fetch(withApiBase('/api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setLastError(data?.error || 'Login failed')
+        return
+      }
       if (data?.user) {
         setUser(data.user)
         sessionStorage.setItem('currentUserName', data.user.name)
-        // refresh users list (ensure roles synced)
-        setUsers(prev => {
-          const idx = prev.findIndex(u=>u.name===data.user.name)
-            if (idx === -1) return [...prev, data.user]
-            const copy = [...prev]; copy[idx]=data.user; return copy
-        })
       }
+      // refresh users list for admin UI
+      const usersRes = await fetch(withApiBase('/api/users'), { credentials: 'include' })
+      if (usersRes.ok) setUsers((await usersRes.json()) || [])
     } catch (e) {
       console.error('login failed', e)
       setLastError('Login failed')
     } finally {
       setIsSaving(false)
-      setUsernameInput('')
     }
   }
 
@@ -131,7 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsSaving(true)
     setLastError(null)
     try {
-  const res = await fetch(withBasePath('/api/auth/windows'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }) })
+  const res = await fetch(withApiBase('/api/auth/windows'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }) })
       const data = await res.json()
       if (!res.ok) {
         setLastError(data?.error || 'Windows auth failed')
@@ -154,12 +158,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const handleLogin = () => {
     if (usernameInput.trim()) {
-      login(usernameInput.trim())
+  void login(usernameInput.trim(), passwordInput)
     }
   }
 
   const logout = () => {
-  fetch(withBasePath('/api/auth/logout'), { method: 'POST' }).catch(()=>{})
+  fetch(withApiBase('/api/auth/logout'), { method: 'POST', credentials: 'include' }).catch(()=>{})
   sessionStorage.removeItem('currentUserName')
   setUser(null)
   }
@@ -172,7 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!name.trim()) return
     setIsSaving(true)
     try {
-  const res = await fetch(withBasePath('/api/users'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), roles }) })
+  const res = await fetch(withApiBase('/api/users'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim(), roles }) })
       const data = await res.json()
       if (data?.user) {
         setUsers(prev => prev.find(p=>p.name===data.user.name) ? prev.map(p=>p.name===data.user.name?data.user:p) : [...prev, data.user])
@@ -183,7 +187,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const updateUserRoles = async (name: string, roles: string[]) => {
     setIsSaving(true)
     try {
-  const res = await fetch(withBasePath('/api/users'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, roles }) })
+  const res = await fetch(withApiBase('/api/users'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, roles }) })
       const data = await res.json()
       if (data?.user) {
         setUsers(prev => prev.map(u=>u.name===name?data.user:u))
@@ -195,7 +199,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const deleteUser = async (name: string) => {
     setIsSaving(true)
     try {
-  await fetch(withBasePath('/api/users'), { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) })
+  await fetch(withApiBase('/api/users'), { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) })
       setUsers(prev => prev.filter(u=>u.name!==name))
       if (user?.name === name) logout()
     } finally { setIsSaving(false) }
@@ -216,28 +220,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           <h2 className="text-2xl font-semibold text-center mb-4 text-gray-800 dark:text-gray-200">Login</h2>
           <p className="text-sm text-center mb-4 text-gray-600 dark:text-gray-400">Local demo login or Windows (AD) login if enabled.</p>
           {autoDebug && <p className="text-[10px] text-center mb-2 text-gray-500">Auto: {autoDebug}</p>}
-          <div className="space-y-4">
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleLogin() }}>
             <div>
               <Label htmlFor="username" className="text-gray-700 dark:text-gray-300">Username</Label>
               <Input id="username" type="text" value={usernameInput} onChange={(e)=>setUsernameInput(e.target.value)} placeholder="e.g., admin or jdoe" className="mt-1 w-full" />
             </div>
             <div>
               <Label htmlFor="password" className="text-gray-700 dark:text-gray-300 flex justify-between">
-                <span>Password (Windows)</span>
+                <span>Password</span>
                 <button type="button" className="text-xs underline" onClick={()=>{ setPasswordInput(''); setLastError(null) }}>clear</button>
               </Label>
-              <Input id="password" type="password" value={passwordInput} onChange={(e)=>setPasswordInput(e.target.value)} placeholder="Windows password" className="mt-1 w-full" />
+              <Input id="password" type="password" value={passwordInput} onChange={(e)=>setPasswordInput(e.target.value)} placeholder="Password" className="mt-1 w-full" />
             </div>
-            <Button onClick={handleLogin} disabled={isSaving} className="w-full bg-slate-600 hover:bg-slate-700 text-white">{isSaving ? 'Signing in...' : 'Local Login'}</Button>
-            <Button onClick={()=>windowsLogin(usernameInput.trim(), passwordInput)} disabled={isSaving || !passwordInput} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{isSaving ? 'Authenticating...' : 'Windows Login'}</Button>
+            <Button type="submit" disabled={isSaving || !passwordInput} className="w-full bg-slate-600 hover:bg-slate-700 text-white">{isSaving ? 'Signing in...' : 'Login'}</Button>
+            <Button type="button" onClick={()=>windowsLogin(usernameInput.trim(), passwordInput)} disabled={isSaving || !passwordInput} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{isSaving ? 'Authenticating...' : 'Windows Login (if enabled)'} </Button>
             {lastError && <p className="text-xs text-red-500 text-center">{lastError}</p>}
-          </div>
+          </form>
         </div>
       </div>
     )
   }
 
-  return <AuthContext.Provider value={{ user, login: (u:string)=>{void login(u)}, windowsLogin, logout, isLoading, hasRole, users, addUser, updateUserRoles, deleteUser, lastError }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, login, windowsLogin, logout, isLoading, hasRole, users, addUser, updateUserRoles, deleteUser, lastError }}>{children}</AuthContext.Provider>
 }
 
 export const useAuth = () => {

@@ -8,6 +8,7 @@ import { FileText, Tag, CalendarDays, User, Trash2, Download, Eye, Brain, Sparkl
 import { useAuth } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
 import { useState } from 'react'
+import { withApiBase } from "@/lib/base-path"
 
 type DocumentCardProps = {
   doc: Document
@@ -26,7 +27,7 @@ export default function DocumentCard({ doc, onDelete, onView, isTestModeEnabled,
 
   const saveKeywords = async (newKeywords: string[]) => {
     // optimistic UI update via direct mutation isn't ideal; instead dispatch event or callback.
-    await fetch('/api/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: doc.id, name: doc.name, type: 'pdf', uploader: doc.uploader, groupId: doc.groupId, keywords: newKeywords, aiSummary: doc.aiSummary, aiExtractedKeywords: doc.aiExtractedKeywords, fullSimulatedText: doc.fullSimulatedText, originalFileName: doc.originalFileName, storedFileName: doc.storedFileName }) })
+    await fetch(withApiBase('/api/documents'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: doc.id, name: doc.name, type: 'pdf', uploader: doc.uploader, groupId: doc.groupId, keywords: newKeywords, aiSummary: doc.aiSummary, aiExtractedKeywords: doc.aiExtractedKeywords, fullSimulatedText: doc.fullSimulatedText, originalFileName: doc.originalFileName, storedFileName: doc.storedFileName }) })
   }
 
   const handleAddKw = () => {

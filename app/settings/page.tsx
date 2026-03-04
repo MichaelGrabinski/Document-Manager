@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { withBasePath } from "@/lib/base-path"
+import { withApiBase } from "@/lib/base-path"
 
 export default function SettingsPage() {
   const [folderFiles, setFolderFiles] = useState<File[]>([])
@@ -18,7 +18,7 @@ export default function SettingsPage() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   useEffect(() => {
     // load groups for assignment
-  fetch(withBasePath('/api/groups')).then(r=>r.json()).then((gs:Group[]) => {
+  fetch(withApiBase('/api/groups')).then(r=>r.json()).then((gs:Group[]) => {
       setGroups(gs.map(g=>({ ...g, searchKeys: Array.isArray(g.searchKeys)?g.searchKeys:[], allowedRoles: Array.isArray(g.allowedRoles)?g.allowedRoles:[] })))
     }).catch(()=>{})
   }, [])
@@ -65,7 +65,7 @@ export default function SettingsPage() {
       const cleanName = f.name.split(/[\\/]/).pop() || f.name
       fd.append('overrideName', cleanName)
       try {
-  const res = await fetch(withBasePath('/api/documents/create-from-upload'), { method: 'POST', body: fd })
+  const res = await fetch(withApiBase('/api/documents/create-from-upload'), { method: 'POST', body: fd })
         const data = await res.json()
         if (!res.ok || data?.error) {
           setUploadStatuses(prev => ({ ...prev, [f.name]: { status: 'error', message: data?.error || res.statusText } }))

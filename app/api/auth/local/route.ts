@@ -1,37 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { signJwt } from '@/lib/jwt'
-import { cookies } from 'next/headers'
 
-// Simple local/dev login issuing a session cookie. Not for production use.
-// POST { username: string }
-// Optionally supply roles override (array) when already admin.
 export const runtime = 'nodejs'
 
+// Local login is replaced by Django auth. Redirect to the main login endpoint.
 export async function POST(req: NextRequest) {
-  if (process.env.LOCAL_LOGIN_DISABLED === 'true') {
-    return NextResponse.json({ error: 'Local login disabled' }, { status: 403 })
+  const DJANGO = process.env.DJANGO_ORIGIN || 'http://127.0.0.1:8000'
+  try {
+    const body = await req.text()
+    // Parse username-only body and forward to Django login
+    let parsed: any = {}
+    try { parsed = JSON.parse(body) } catch {}
+    const username = parsed.username || ''
+    // Local route historically took just a username (no password). Map to Django
+    // by using a placeholder password  callers should use /api/auth/login instead.
+    const resp = await fetch(`${DJANGO}/file/api/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie: req.headers.get('cookie') || '' },
+      body: JSON.stringify({ username, password: parsed.password || '' }),
+    })
+    const data = await resp.json().catch(() => ({ error: 'login failed' }))
+    const res = NextResponse.json(data, { status: resp.status })
+    resp.headers.getSetCookie?.()?.forEach(c => res.headers.append('set-cookie', c))
+    return res
+  } catch {
+    return NextResponse.json({ error: 'Login unavailable' }, { status: 502 })
   }
-  const body = await req.json().catch(()=>null) as { username?: string; roles?: string[] }
-  const username = body?.username?.trim()
-  if (!username) return NextResponse.json({ error: 'username required' }, { status: 400 })
-  const lower = username.toLowerCase()
-  // Simple heuristic roles if not provided: names containing admin/editor
-  let roles: string[] = Array.isArray(body?.roles) && body.roles.length>0 ? body.roles : ( lower.includes('admin') ? ['admin','editor','viewer'] : lower.includes('editor') ? ['editor','viewer'] : ['viewer'] )
-  // Ensure role inheritance consistency
-  if (roles.includes('admin') && !roles.includes('editor')) roles.push('editor')
-  if ((roles.includes('admin')||roles.includes('editor')) && !roles.includes('viewer')) roles.push('viewer')
-  roles = Array.from(new Set(roles))
-
-  const user = await prisma.user.upsert({
-    where: { name: lower },
-    update: { roles: JSON.stringify(roles) },
-    create: { name: lower, roles: JSON.stringify(roles) }
-  })
-
-  const secret = process.env.JWT_SECRET || 'dev-secret-change'
-  const token = signJwt({ sub: user.id, name: user.name, roles }, secret, 3600)
-  const ck = await cookies()
-  ck.set({ name: 'session', value: token, httpOnly: true, sameSite: 'lax', path: '/', maxAge: 3600, secure: process.env.NODE_ENV === 'production' })
-  return NextResponse.json({ success: true, user: { name: user.name, roles }, token })
 }
