@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { forwardCookies } from '@/lib/cookies'
 
 export const runtime = 'nodejs'
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
     const data = await resp.json()
     const res = NextResponse.json(data, { status: resp.status })
     // Forward any Set-Cookie from Django (session cookie)
-    resp.headers.getSetCookie?.()?.forEach(c => res.headers.append('set-cookie', c))
+    forwardCookies(resp, res, req)
     return res
   } catch {
     return NextResponse.json({ authenticated: false }, { status: 401 })

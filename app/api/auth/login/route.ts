@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { forwardCookies } from '@/lib/cookies'
 
 export const runtime = 'nodejs'
 
@@ -17,8 +18,8 @@ export async function POST(req: NextRequest) {
     })
     const data = await resp.json().catch(() => ({}))
     const res = NextResponse.json(data, { status: resp.status })
-    // Forward the Django session cookie to the browser
-    resp.headers.getSetCookie?.()?.forEach(c => res.headers.append('set-cookie', c))
+    // Forward the Django session cookie to the browser (with Secure flag on HTTPS)
+    forwardCookies(resp, res, req)
     return res
   } catch (e) {
     console.error('proxy login error', e)

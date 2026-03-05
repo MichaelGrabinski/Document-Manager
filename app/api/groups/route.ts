@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { forwardCookies } from '@/lib/cookies'
 
 export const runtime = 'nodejs'
 
@@ -15,7 +16,7 @@ async function proxy(req: NextRequest, method: string, body?: string) {
   })
   const data = await resp.json().catch(() => method === 'GET' ? [] : {})
   const res = NextResponse.json(data, { status: resp.status })
-  resp.headers.getSetCookie?.()?.forEach(c => res.headers.append('set-cookie', c))
+  forwardCookies(resp, res, req)
   return res
 }
 

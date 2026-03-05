@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { forwardCookies } from '@/lib/cookies'
 
 export const runtime = 'nodejs'
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     })
     const data = await resp.json().catch(() => ({ error: 'login failed' }))
     const res = NextResponse.json(data, { status: resp.status })
-    resp.headers.getSetCookie?.()?.forEach(c => res.headers.append('set-cookie', c))
+    forwardCookies(resp, res, req)
     return res
   } catch {
     return NextResponse.json({ error: 'Login unavailable' }, { status: 502 })

@@ -5,6 +5,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import * as pako from "pako"
+import { forwardCookies } from "@/lib/cookies"
 
 export const runtime = "nodejs"
 
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
     }
 
     const res = NextResponse.json({ ...data, ai: aiUsed, extractionStage })
-    djangoResp.headers.getSetCookie?.()?.forEach((c) => res.headers.append("set-cookie", c))
+    forwardCookies(djangoResp, res, req)
     return res
   } catch (e: any) {
     console.error("create-from-upload error", e)
