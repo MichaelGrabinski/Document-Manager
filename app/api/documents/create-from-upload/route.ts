@@ -143,13 +143,27 @@ function hexStringScan(buffer: Buffer): string {
     let m: RegExpExecArray | null
     while ((m = hexRe.exec(text)) !== null) {
       const hex = m[1]
+      // CID-keyed fonts often use 2-byte (4 hex char) glyph IDs.
+      // If the hex string length is a multiple of 4 and > 8, it's likely CID glyph IDs
+      // Decode and check if result is mostly printable ASCII
       let out = ""
+      let printable = 0
+      let total = 0
       for (let i = 0; i < hex.length; i += 2) {
         const byte = parseInt(hex.slice(i, i + 2), 16)
+        total++
         if (byte === 0x0a || byte === 0x0d) { out += "\n"; continue }
-        if (byte >= 32 && byte <= 126) out += String.fromCharCode(byte)
+        if (byte >= 32 && byte <= 126) { out += String.fromCharCode(byte); printable++ }
       }
       out = out.trim()
+      // If less than 40% of bytes are printable ASCII, it's likely CID glyph IDs → skip
+      if (total > 4 && printable / total < 0.4) continue
+      // Check for vowel presence — real text has vowels
+      if (out.length > 10) {
+        const vowels = (out.match(/[AEIOUaeiou]/g) || []).length
+        const letters = (out.match(/[A-Za-z]/g) || []).length
+        if (letters > 0 && vowels / letters < 0.05) continue  // No vowels → garbage
+      }
       if (out) results.push(out)
       if (results.join(" ").length > 200_000) break
     }
@@ -190,6 +204,14 @@ function flateStreamScan(buffer: Buffer): string {
       const byteArr = Buffer.from(m[1], "latin1")
       try {
         const inflated = pako.inflate(byteArr, { to: "string" }) as string
+        // Skip streams that look like font tables (contain many uni#### glyph names)
+        const uniCount = (inflated.match(/uni[0-9A-Fa-f]{4}/g) || []).length
+        if (uniCount > 20) continue  // Font CMap or glyph table — skip entirely
+        // Skip streams that look like ICC color profiles
+        if (/HLino.*mntrRGB|acspMSFT/i.test(inflated)) continue
+        // Skip streams that look like OpenType/TrueType font data (contain font table names)
+        const fontTableHits = (inflated.match(/\b(GSUB|GPOS|GDEF|cmap|glyf|hhea|hmtx|loca|maxp|prep|fpgm|cvt)\b/g) || []).length
+        if (fontTableHits >= 4) continue  // Likely font program data
         const words = inflated.match(/[A-Za-z][A-Za-z0-9_-]{2,}/g)
         if (words && words.length > 10) out.push(words.slice(0, 2000).join(" "))
       } catch {}
@@ -200,9 +222,35 @@ function flateStreamScan(buffer: Buffer): string {
 }
 
 function signalScore(text: string): number {
-  const tokens = text.split(/\s+/)
+  const tokens = text.split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return 0
-  return tokens.filter((t) => /[A-Za-z]{3,}/.test(t)).length / tokens.length
+
+  // Count tokens that look like real English words vs PDF/font garbage
+  let good = 0
+  let garbage = 0
+  for (const t of tokens) {
+    // CID / Unicode glyph names: uni0041, uni00C4, glyph123, cid0042
+    if (/^(uni|glyph|cid)[0-9A-Fa-f]{2,}/i.test(t)) { garbage++; continue }
+    // OpenType feature tags: aalt, calt, ccmp, cv01-cv99, dlig, frac, locl, etc.
+    if (/^(aalt|calt|case|ccmp|cv\d{2}|dlig|frac|liga|locl|numr|onum|ordn|pnum|salt|sinf|smcp|ss\d{2}|subs|sups|tnum|zero)$/i.test(t)) { garbage++; continue }
+    // Font table names: GSUB, GPOS, cmap, glyf, hhea, hmtx, loca, maxp, etc.
+    if (/^(GSUB|GPOS|GDEF|cmap|glyf|head|hhea|hmtx|loca|maxp|name|post|prep|gasp|OS_2|kern|fpgm|cvt|DSIG|UxOS|VDMX)$/i.test(t)) { garbage++; continue }
+    // ICC profile markers
+    if (/^(HLino|mntrRGB|acspMSFT|cprt|desc|wtpt|bkpt|rXYZ|gXYZ|bXYZ|dmnd|dmdd|vued)$/i.test(t)) { garbage++; continue }
+    // PDF structure tags that aren't real content
+    if (/^(SCN|scn|BDC|EMC|MCID|BBox|StructParent|Artifact|Pagination|Catalog|Subtype)$/i.test(t)) { garbage++; continue }
+    // Long hex-like tokens (4+ hex chars with no vowels besides A/E)
+    if (/^[0-9A-Fa-f]{6,}$/.test(t)) { garbage++; continue }
+    // Real 3+ letter word
+    if (/[A-Za-z]{3,}/.test(t)) { good++; continue }
+  }
+
+  // If garbage dominates, score is near zero
+  const total = good + garbage
+  if (total === 0) return 0
+  const garbageRatio = garbage / tokens.length
+  if (garbageRatio > 0.25) return 0  // More than 25% garbage tokens → reject
+  return good / tokens.length
 }
 
 function cleanExtractedText(raw: string): string {
@@ -212,6 +260,13 @@ function cleanExtractedText(raw: string): string {
     "FirstChar","LastChar","ToUnicode","Widths","Catalog","Pages","Creator",
     "CreationDate","ModDate","XObject","ImageC","ImageB","Type","Subtype",
     "Parent","Resources","Font","Count","Kids",
+    // Font table names
+    "GSUB","GPOS","GDEF","cmap","glyf","head","hhea","hmtx","loca","maxp",
+    "name","post","prep","gasp","kern","fpgm","cvt","DSIG","UxOS","VDMX",
+    // ICC color profile markers
+    "HLino","mntrRGB","acspMSFT","cprt","desc","wtpt","bkpt","rXYZ","gXYZ","bXYZ",
+    // PDF operators / structure
+    "SCN","scn","BDC","EMC","MCID","BBox","StructParent","Artifact","Pagination",
   ])
   const kept: string[] = []
   for (let line of raw.split(/\r?\n/)) {
@@ -224,12 +279,36 @@ function cleanExtractedText(raw: string): string {
     if (fD > 0.6) continue
     const toks = t.split(/\s+/)
     if (toks.filter((x) => DROP.has(x)).length >= 3) continue
+
+    // ── NEW: Reject lines dominated by Unicode glyph names (uni0041, uni00C4, etc.)
+    const uniGlyphCount = (t.match(/\buni[0-9A-Fa-f]{4,}\b/g) || []).length
+    if (uniGlyphCount >= 3) continue  // 3+ glyph names on one line → font metadata
+    if (toks.length > 0 && uniGlyphCount / toks.length > 0.3) continue
+
+    // ── NEW: Reject lines dominated by OpenType feature tags
+    const otTagCount = (t.match(/\b(aalt|calt|case|ccmp|cv\d{2}|dlig|frac|liga|locl|numr|onum|ordn|pnum|salt|sinf|smcp|ss\d{2}|subs|sups|tnum|zero)\b/gi) || []).length
+    if (otTagCount >= 4) continue
+
+    // ── NEW: Reject lines that are mostly long hex sequences
+    const hexSeqCount = (t.match(/[0-9A-Fa-f]{8,}/g) || []).length
+    if (hexSeqCount >= 2) continue
+    if (toks.length > 0 && hexSeqCount / toks.length > 0.3) continue
+
+    // ── NEW: Reject lines with ICC color profile markers
+    if (/\b(HLino|mntrRGB|acspMSFT|IEC\s*sRGB)\b/i.test(t)) continue
+
+    // ── NEW: Reject lines with font-name patterns (e.g. "Inter-RegularRegular", "Domine-SemiBoldSemiBold")
+    if (/\b[A-Z][a-z]+-(?:Regular|Bold|SemiBold|Italic|Medium|Light|Thin|Black|ExtraBold|ExtraLight){2,}\b/.test(t)) continue
+
     const letters = (t.match(/[A-Za-z]/g) || []).length
     if (letters / Math.max(t.length, 1) < 0.25) continue
     let cl = t.replace(/\bF_\d+\b/g, " ").replace(/\s+/g, " ").trim()
     if (!cl) continue
     cl = cl.replace(/\b(Artifact|BDC|EMC)\b/gi, "").replace(/\s+/g, " ").trim()
     if (!cl) continue
+    // ── NEW: Remove stray glyph-name and hex tokens from surviving lines
+    cl = cl.replace(/\buni[0-9A-Fa-f]{4,}\b/g, " ").replace(/\b[0-9A-Fa-f]{8,}\b/g, " ").replace(/\s+/g, " ").trim()
+    if (!cl || cl.length < 3) continue
     const vR = (cl.match(/[AEIOUaeiou]/g) || []).length / Math.max(cl.replace(/[^A-Za-z]/g, "").length, 1)
     if (vR < 0.2 && cl.split(/\s+/).length < 8) continue
     kept.push(cl)
@@ -244,7 +323,15 @@ function cleanExtractedText(raw: string): string {
 function maybeClean(raw: string): { text: string; accept: boolean } {
   if (process.env.RAW_PDF_TEXT === "true") return { text: raw, accept: true }
   const cleaned = cleanExtractedText(raw)
-  const accept = signalScore(cleaned) >= 0.18 || cleaned.split(/\s+/).length > 50
+  const score = signalScore(cleaned)
+  const wordCount = cleaned.split(/\s+/).filter(Boolean).length
+
+  // Final readability check: even if score looks ok, if text is very short after
+  // cleaning (most content was garbage that got stripped), reject it
+  if (wordCount < 5) return { text: cleaned, accept: false }
+
+  const accept = score >= 0.18 || wordCount > 50
+  console.log(`[maybeClean] score=${score.toFixed(3)}, words=${wordCount}, accept=${accept}, cleanedLen=${cleaned.length}`)
   return { text: cleaned, accept }
 }
 
@@ -300,11 +387,14 @@ async function loadPdfJs(): Promise<any> {
 async function extractPdfText(file: File): Promise<string> {
   const dataBuf = Buffer.from(await file.arrayBuffer())
   const s1 = simpleStringScan(dataBuf)
-  if (s1.trim().length > 40) { const c = maybeClean(s1); if (c.accept) return c.text.slice(0, 200_000) }
+  console.log(`[extractPdfText] simpleStringScan: ${s1.trim().length} raw chars`)
+  if (s1.trim().length > 40) { const c = maybeClean(s1); console.log(`[extractPdfText]   simpleString cleaned: accept=${c.accept}, len=${c.text.length}`); if (c.accept) return c.text.slice(0, 200_000) }
   const sh = hexStringScan(dataBuf)
-  if (sh.trim().length > s1.trim().length && sh.trim().length > 40) { const c = maybeClean(sh); if (c.accept) return c.text.slice(0, 200_000) }
+  console.log(`[extractPdfText] hexStringScan: ${sh.trim().length} raw chars`)
+  if (sh.trim().length > s1.trim().length && sh.trim().length > 40) { const c = maybeClean(sh); console.log(`[extractPdfText]   hexString cleaned: accept=${c.accept}, len=${c.text.length}`); if (c.accept) return c.text.slice(0, 200_000) }
   const s2 = flateStreamScan(dataBuf)
-  if (s2.trim().length > s1.trim().length && s2.trim().length > 40) { const c = maybeClean(s2); if (c.accept) return c.text.slice(0, 200_000) }
+  console.log(`[extractPdfText] flateStreamScan: ${s2.trim().length} raw chars`)
+  if (s2.trim().length > s1.trim().length && s2.trim().length > 40) { const c = maybeClean(s2); console.log(`[extractPdfText]   flateStream cleaned: accept=${c.accept}, len=${c.text.length}`); if (c.accept) return c.text.slice(0, 200_000) }
   const forcePdfJs = process.env.FORCE_PDFJS === "true" || (s1.trim().length + sh.trim().length + s2.trim().length) < 40
   if (process.env.ENABLE_PDFTOTEXT === "true" || (!forcePdfJs && (s1+sh+s2).trim().length < 120)) {
     try {

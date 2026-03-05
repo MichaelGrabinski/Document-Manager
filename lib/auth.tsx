@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // 1. Try auto Windows header login (if proxy provides header)
         // Try auto Windows header login regardless of build-time flag; server decides if enabled
         try {
-          const autoRes = await fetch(withApiBase('/api/auth/auto'))
+          const autoRes = await fetch(withApiBase('/api/auth/auto'), { credentials: 'include' })
           const txt = await autoRes.text()
           let autoJson: any = null
           try { autoJson = JSON.parse(txt) } catch {}
@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         // 2. Validate existing session cookie
         if (!user) {
-          const sessionRes = await fetch(withApiBase('/api/auth/session'))
+          const sessionRes = await fetch(withApiBase('/api/auth/session'), { credentials: 'include' })
           if (sessionRes.ok) {
             const sessionData = await sessionRes.json()
             if (sessionData?.authenticated && sessionData.user) {
@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         }
-  const res = await fetch(withApiBase('/api/users'))
+  const res = await fetch(withApiBase('/api/users'), { credentials: 'include' })
         const data = await res.json()
         if (!cancelled) setUsers(data || [])
       } catch (e) {
@@ -135,7 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsSaving(true)
     setLastError(null)
     try {
-  const res = await fetch(withApiBase('/api/auth/windows'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }) })
+  const res = await fetch(withApiBase('/api/auth/windows'), { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ username, password }), credentials: 'include' })
       const data = await res.json()
       if (!res.ok) {
         setLastError(data?.error || 'Windows auth failed')

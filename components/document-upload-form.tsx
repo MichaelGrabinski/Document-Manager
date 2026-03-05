@@ -89,7 +89,7 @@ export default function DocumentUploadForm({ onDocumentAdd, groups }: DocumentUp
       if (selectedGroupId) formData.append("groupId", selectedGroupId)
       formData.append("keywords", keywords.join(","))
       try {
-        const res = await fetch(withApiBase("/api/documents/create-from-upload"), { method: "POST", body: formData })
+        const res = await fetch(withApiBase("/api/documents/create-from-upload"), { method: "POST", body: formData, credentials: 'include' })
         const data = await res.json()
         if (res.ok && data.doc) {
           // Attach the File client-side for viewing/downloading session-only

@@ -94,8 +94,8 @@ WSGI_APPLICATION = 'docmanager_backend.wsgi.application'
 def _env(name: str, default: str | None = None) -> str | None:
     return os.environ.get(name, default)
 
-# Default to SQLite for local dev; switch to MSSQL by setting DJANGO_DB_ENGINE=mssql
-DB_ENGINE = _env('DJANGO_DB_ENGINE', 'sqlite')
+# Default to MSSQL; override with DJANGO_DB_ENGINE=sqlite only if needed
+DB_ENGINE = _env('DJANGO_DB_ENGINE', 'mssql')
 if DB_ENGINE == 'mssql':
     trust_cert = _env('DJANGO_DB_TRUST_CERT', 'true') == 'true'
     encrypt = _env('DJANGO_DB_ENCRYPT', 'true') == 'true'
@@ -103,10 +103,10 @@ if DB_ENGINE == 'mssql':
     DATABASES = {
         'default': {
             'ENGINE': 'mssql',
-            'NAME': _env('DJANGO_DB_NAME', 'docmanager'),
+            'NAME': _env('DJANGO_DB_NAME', 'FileManager'),
             'USER': _env('DJANGO_DB_USER', ''),
             'PASSWORD': _env('DJANGO_DB_PASSWORD', ''),
-            'HOST': _env('DJANGO_DB_HOST', 'localhost'),
+            'HOST': _env('DJANGO_DB_HOST', 'TOEHSQL1'),
             'PORT': _env('DJANGO_DB_PORT', '1433'),
             'OPTIONS': {
                 # Example: ODBC Driver 18 for SQL Server
@@ -121,23 +121,31 @@ if DB_ENGINE == 'mssql':
             },
         }
     }
-else:
+elif DB_ENGINE == 'sqlite':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+else:
+    raise ValueError(f"Unsupported DJANGO_DB_ENGINE: {DB_ENGINE!r}. Use 'mssql' or 'sqlite'.")
 
 # CORS (lock down later)
 CORS_ALLOW_ALL_ORIGINS = _env('DJANGO_CORS_ALLOW_ALL', 'true') == 'true'
 CORS_ALLOW_CREDENTIALS = True  # required for cross-origin session cookies
 
-# Session cookies must be SameSite=None for cross-origin dev (localhost:3001 → 127.0.0.1:8000)
-SESSION_COOKIE_SAMESITE = 'None'
-SESSION_COOKIE_SECURE = False  # Allow HTTP in dev; set True behind HTTPS in prod
-CSRF_COOKIE_SAMESITE = 'None'
-CSRF_COOKIE_SECURE = False
+# Session / CSRF cookie settings
+# Behind nginx (same domain), use Lax. Only use None for true cross-origin dev.
+# Set DJANGO_SESSION_COOKIE_SECURE=true when behind HTTPS (production).
+_cookie_secure = _env('DJANGO_SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+_cookie_samesite = _env('DJANGO_SESSION_COOKIE_SAMESITE', 'Lax')
+
+SESSION_COOKIE_SAMESITE = _cookie_samesite
+SESSION_COOKIE_SECURE = _cookie_secure
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = _cookie_samesite
+CSRF_COOKIE_SECURE = _cookie_secure
 
 # REST Framework defaults
 REST_FRAMEWORK = {

@@ -10,6 +10,8 @@ const nextConfig = {
   basePath,
   assetPrefix: basePath,
   trailingSlash: false,
+  // Allow the production hostname to connect during dev mode (suppresses cross-origin warning)
+  allowedDevOrigins: ['https://apps.easthartfordct.gov'],
   eslint: {
     ignoreDuringBuilds: true,
   },

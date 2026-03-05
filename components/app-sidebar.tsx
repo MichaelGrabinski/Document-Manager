@@ -182,7 +182,7 @@ const GroupItemContentInternal = ({
                   setConfirmingDelete(true)
                   setTimeout(() => setConfirmingDelete(false), 3000)
                 } else {
-                  fetch(withApiBase('/api/groups'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: group.id }) })
+                  fetch(withApiBase('/api/groups'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: group.id }), credentials: 'include' })
                   // Optimistic removal from UI: custom event dispatch for parent to reload or rely on external refresh logic.
                   const ev = new CustomEvent('group-deleted', { detail: { id: group.id } })
                   window.dispatchEvent(ev)

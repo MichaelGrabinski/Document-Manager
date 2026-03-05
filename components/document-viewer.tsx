@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import type { Document } from "@/lib/types"
 import { useEffect, useState } from 'react'
+import { withApiBase } from "@/lib/base-path"
 
 type DocumentViewerProps = {
   doc: Document | null
@@ -24,7 +25,7 @@ export default function DocumentViewer({ doc, isOpen, onOpenChange }: DocumentVi
       }
       if (doc.storedFileName) {
         try {
-          const res = await fetch(`/api/file/${encodeURIComponent(doc.storedFileName)}`)
+          const res = await fetch(withApiBase(`/api/file/${encodeURIComponent(doc.storedFileName)}`), { credentials: 'include' })
           if (!res.ok) throw new Error('fetch failed')
           const blob = await res.blob()
           if (revoked) return

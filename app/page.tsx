@@ -34,7 +34,7 @@ export default function HomePage() {
 
   useEffect(() => {
     // Load documents from backend API
-  fetch(withApiBase("/api/documents"))
+  fetch(withApiBase("/api/documents"), { credentials: 'include' })
       .then((res) => res.json())
       .then((docs) => {
         setDocuments(
@@ -48,7 +48,7 @@ export default function HomePage() {
       })
       .catch(() => setDocuments([]))
     // Load groups from backend API
-  fetch(withApiBase("/api/groups"))
+  fetch(withApiBase("/api/groups"), { credentials: 'include' })
       .then(res => res.json())
       .then(gs => setGroups(gs.map((g: any) => ({
         ...g,
@@ -100,6 +100,7 @@ export default function HomePage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newDoc),
+      credentials: 'include',
     })
     setIsUploadDialogOpen(false)
   }
@@ -122,6 +123,7 @@ export default function HomePage() {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
+      credentials: 'include',
     })
   }
 
@@ -138,7 +140,7 @@ export default function HomePage() {
       if (!hasRole("admin")) return
       const newGroup: Group = { id: crypto.randomUUID(), name: groupName, parentId: parentId, searchKeys: [] }
       setGroups((prevGroups) => [...prevGroups, newGroup])
-  fetch(withApiBase("/api/groups"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup) })
+  fetch(withApiBase("/api/groups"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup), credentials: 'include' })
     },
     [hasRole],
   )
@@ -150,7 +152,7 @@ export default function HomePage() {
 
   const handleUpdateGroup = useCallback((updatedGroupData: Partial<Group> & { id: string }) => {
     setGroups((prevGroups) => prevGroups.map((g) => (g.id === updatedGroupData.id ? { ...g, ...updatedGroupData } : g)))
-  fetch(withApiBase("/api/groups"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedGroupData) })
+  fetch(withApiBase("/api/groups"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updatedGroupData), credentials: 'include' })
     setIsEditGroupDialogOpen(false)
     setEditingGroup(null)
   }, [])
